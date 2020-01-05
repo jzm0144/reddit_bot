@@ -275,7 +275,7 @@ def beam_search_generator(sess, net, initial_state, initial_sample,
             beam_outputs = [output[l:] for output in beam_outputs]
         if early_term: return
 
-def runBot(states = None, user_input):
+def runBot(user_input, states = None):
     assert sys.version_info >= (3, 3), \
     "Must be run in Python 3.3 or later. You are running {}".format(sys.version)
     parser = argparse.ArgumentParser()
@@ -517,7 +517,7 @@ class Chatbox(object):
 
         self.user_message(self._my_nick, content)
 
-        response, self.states = runBot(self.states, content)
+        response, self.states = runBot(content, self.states)
 
         self.user_message("Bot: ", response)
 

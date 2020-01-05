@@ -517,7 +517,7 @@ class Chatbox(object):
 
         self.user_message(self._my_nick, content)
 
-        response, self.states = runBot(self.states)
+        response, self.states = runBot(self.states, content)
 
         self.user_message("Bot: ", response)
 

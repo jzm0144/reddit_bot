@@ -328,7 +328,7 @@ def runBot(user_input, states = None):
         response, states = chatbot(net, sess, chars, vocab, args.n, args.beam_width,
                            args.relevance, args.temperature, args.topn, states, user_input)
 
-    return response, states
+        return response, states
 
 try:
     from Tkinter import StringVar, Text, Frame, PanedWindow, Scrollbar, Label, Entry
@@ -522,7 +522,6 @@ class Chatbox(object):
         self.user_message("Bot: ", response)
 
         print("this was a new message from janzaib")
-        print("Message Counter = ", self.send_counter)
 
     def _filter_text(self, text):
         return "".join(ch for ch in text if ch <= u"\uFFFF")

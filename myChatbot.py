@@ -275,46 +275,8 @@ def beam_search_generator(sess, net, initial_state, initial_sample,
             beam_outputs = [output[l:] for output in beam_outputs]
         if early_term: return
 
-def runBot(user_input, states = None):
-    assert sys.version_info >= (3, 3), \
-    "Must be run in Python 3.3 or later. You are running {}".format(sys.version)
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--save_dir', type=str, default='models/reddit',
-                       help='model directory to store checkpointed models')
-    parser.add_argument('-n', type=int, default=500,
-                       help='number of characters to sample')
-    parser.add_argument('--prime', type=str, default=' ',
-                       help='prime text')
-    parser.add_argument('--beam_width', type=int, default=2,
-                       help='Width of the beam for beam search, default 2')
-    parser.add_argument('--temperature', type=float, default=1.0,
-                       help='sampling temperature'
-                       '(lower is more conservative, default is 1.0, which is neutral)')
-    parser.add_argument('--topn', type=int, default=-1,
-                        help='at each step, choose from only this many most likely characters;'
-                        'set to <0 to disable top-n filtering.')
-    parser.add_argument('--relevance', type=float, default=-1.,
-                       help='amount of "relevance masking/MMI (disabled by default):"'
-                       'higher is more pressure, 0.4 is probably as high as it can go without'
-                       'noticeably degrading coherence;'
-                       'set to <0 to disable relevance masking')
-    args = parser.parse_args()
+def runBot(user_input, args, states = None):
 
-    model_path, config_path, vocab_path = get_paths(args.save_dir)
-    # Arguments passed to sample.py direct us to a saved model.
-    # Load the separate arguments by which that model was previously trained.
-    # That's saved_args. Use those to load the model.
-    with open(config_path, 'rb') as f:
-        saved_args = pickle.load(f)
-    # Separately load chars and vocab from the save directory.
-    with open(vocab_path, 'rb') as f:
-        chars, vocab = pickle.load(f)
-    # Create the model from the saved arguments, in inference mode.
-    print("Creating model...")
-    saved_args.batch_size = args.beam_width
-    net = Model(saved_args, True)
-    config = tf.ConfigProto()
-    config.gpu_options.allow_growth = True
     # Make tensorflow less verbose; filter out info (1+) and warnings (2+) but not errors (3).
     os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
     with tf.Session(config=config) as sess:
@@ -327,8 +289,8 @@ def runBot(user_input, states = None):
             states = initial_state_with_relevance_masking(net, sess, args.relevance)
         response, states = chatbot(net, sess, chars, vocab, args.n, args.beam_width,
                            args.relevance, args.temperature, args.topn, states, user_input)
-
-        return response, states
+    sess.close()
+    return response, states
 
 try:
     from Tkinter import StringVar, Text, Frame, PanedWindow, Scrollbar, Label, Entry
@@ -347,8 +309,17 @@ Notification_Of_Private_Message = collections.namedtuple('Notification_Message',
 
 # TODO: Add frame topic
 class Chatbox(object):
-    def __init__(self, master, my_nick=None, command=None, topic=None, entry_controls=None, maximum_lines=None, timestamp_template=None, scrollbar_background=None, scrollbar_troughcolor=None, history_background=None, history_font=None, history_padx=None, history_pady=None, history_width=None, entry_font=None, entry_background=None, entry_foreground=None, label_template=u"{nick}", label_font=None, logging_file=None, tags=None):
+    def __init__(self, master, bot_dict, my_nick=None, command=None, topic=None, entry_controls=None, maximum_lines=None, timestamp_template=None, scrollbar_background=None, scrollbar_troughcolor=None, history_background=None, history_font=None, history_padx=None, history_pady=None, history_width=None, entry_font=None, entry_background=None, entry_foreground=None, label_template=u"{nick}", label_font=None, logging_file=None, tags=None):
         
+        self.args = bot_dict["args"]
+        self.model_path = bot_dict["model_path"]
+        self.config_path = bot_dict["config_path"]
+        self.vocab_path = bot_dict["vocab_path"]
+        self.saved_args = bot_dict["saved_args"]
+        self.chars = bot_dict["chars"]
+        self.vocab = bot_dict["vocab"]
+        self.net = bot_dict["net"]
+        self.config = bot_dict["config"]
 
         self.states = None
 
@@ -517,7 +488,7 @@ class Chatbox(object):
 
         self.user_message(self._my_nick, content)
 
-        response, self.states = runBot(content, self.states)
+        response, self.states = runBot(content, self.args, self.states)
 
         self.user_message("Bot: ", response)
 
@@ -591,6 +562,57 @@ def command(txt):
     print(txt)
 if __name__ == "__main__":
 
+    assert sys.version_info >= (3, 3), \
+    "Must be run in Python 3.3 or later. You are running {}".format(sys.version)
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--save_dir', type=str, default='models/reddit',
+                       help='model directory to store checkpointed models')
+    parser.add_argument('-n', type=int, default=500,
+                       help='number of characters to sample')
+    parser.add_argument('--prime', type=str, default=' ',
+                       help='prime text')
+    parser.add_argument('--beam_width', type=int, default=2,
+                       help='Width of the beam for beam search, default 2')
+    parser.add_argument('--temperature', type=float, default=1.0,
+                       help='sampling temperature'
+                       '(lower is more conservative, default is 1.0, which is neutral)')
+    parser.add_argument('--topn', type=int, default=-1,
+                        help='at each step, choose from only this many most likely characters;'
+                        'set to <0 to disable top-n filtering.')
+    parser.add_argument('--relevance', type=float, default=-1.,
+                       help='amount of "relevance masking/MMI (disabled by default):"'
+                       'higher is more pressure, 0.4 is probably as high as it can go without'
+                       'noticeably degrading coherence;'
+                       'set to <0 to disable relevance masking')
+    args = parser.parse_args()
+
+    model_path, config_path, vocab_path = get_paths(args.save_dir)
+    # Arguments passed to sample.py direct us to a saved model.
+    # Load the separate arguments by which that model was previously trained.
+    # That's saved_args. Use those to load the model.
+    with open(config_path, 'rb') as f:
+        saved_args = pickle.load(f)
+    # Separately load chars and vocab from the save directory.
+    with open(vocab_path, 'rb') as f:
+        chars, vocab = pickle.load(f)
+    # Create the model from the saved arguments, in inference mode.
+    print("Creating model...")
+    saved_args.batch_size = args.beam_width
+    net = Model(saved_args, True)
+    config = tf.ConfigProto()
+    config.gpu_options.allow_growth = True
+
+    bot_dict = {"args"        :args,
+                "model_path"  :model_path,
+                "config_path" :config_path,
+                "vocab_path"  :vocab_path,
+                "saved_args"  :saved_args,
+                "chars"       :chars,
+                "vocab"       :vocab,
+                "net"         :net,
+                "config"      :config}
+
+
     try:
         from Tkinter import Tk
     except ImportError:
@@ -599,7 +621,7 @@ if __name__ == "__main__":
     root = Tk()
     root.title("Chatbot")
 
-    chatbox = Chatbox(root, my_nick="User", command=command)
+    chatbox = Chatbox(root, my_nick="User", command=command, bot_dict=bot_dict)
     chatbox.user_message("Bot", "Hello, I am chatbot. Please talk to me.")
     chatbox.interior.pack(expand=True, fill=BOTH)
     root.mainloop()
